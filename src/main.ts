@@ -1,12 +1,13 @@
-
 import './style.css';
 import katex from 'katex';
 import Lenis from 'lenis';
 import { topics } from './data/topics';
+import { renderHome } from './pages/home';
 
 import { initSim as initSimSphericalMirror } from './simulations/spherical-mirror';
 import { initSim as initSimRefraction } from './simulations/refraction';
 import { initSim as initSimTir } from './simulations/tir';
+import { initSim as initSimSphericalRefraction } from './simulations/spherical-refraction';
 import { initSim as initSimThinLens } from './simulations/thin-lens';
 import { initSim as initSimPrism } from './simulations/prism';
 import { initSim as initSimLensCombo } from './simulations/lens-combo';
@@ -25,6 +26,7 @@ const simMap: Record<string, any> = {
   'spherical-mirror': initSimSphericalMirror,
   'refraction': initSimRefraction,
   'tir': initSimTir,
+  'spherical-refraction': initSimSphericalRefraction,
   'thin-lens': initSimThinLens,
   'prism': initSimPrism,
   'lens-combo': initSimLensCombo,
@@ -35,46 +37,7 @@ const simMap: Record<string, any> = {
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
-function createHeroCanvas(canvas: HTMLCanvasElement) {
-  const ctx = canvas.getContext('2d')!;
-  let w = 0, h = 0; let animId: number;
-  function resize() { w = canvas.offsetWidth; h = canvas.offsetHeight; canvas.width = w; canvas.height = h; }
-  const rays = Array.from({length: 5}, (_, i) => ({
-    x: Math.random() * 400, y: Math.random() * 300,
-    angle: (Math.PI / 8) * (i + 1), speed: 1.2 + i * 0.3, len: 180 + i * 40,
-  }));
-  function draw() {
-    ctx.clearRect(0, 0, w, h);
-    rays.forEach(ray => {
-      ray.x += Math.cos(ray.angle) * ray.speed; ray.y += Math.sin(ray.angle) * ray.speed;
-      if (ray.x < 0 || ray.x > w) ray.angle = Math.PI - ray.angle;
-      if (ray.y < 0 || ray.y > h) ray.angle = -ray.angle;
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
-      ctx.moveTo(ray.x, ray.y);
-      ctx.lineTo(ray.x + Math.cos(ray.angle) * ray.len, ray.y + Math.sin(ray.angle) * ray.len);
-      ctx.stroke();
-    });
-    animId = requestAnimationFrame(draw);
-  }
-  resize(); window.addEventListener('resize', resize);
-  animId = requestAnimationFrame(draw);
-  return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize); };
-}
-
-function renderTopicCard(topic: any, index: number): string {
-  return `<a class="topic-card" href="#/topic/${topic.id}">
-    <span class="card-num">${String(index + 1).padStart(2, '0')}</span>
-    <span class="card-title">${topic.title}</span>
-    <span class="card-desc">${topic.description || ''}</span>
-    <span class="card-arrow">→</span>
-  </a>`;
-}
-
-let canvasCleanup: any = null;
-
 function route() {
-  if(canvasCleanup) { canvasCleanup(); canvasCleanup = null; }
   const hash = window.location.hash.slice(1) || '/';
   app.innerHTML = '';
   
@@ -92,32 +55,9 @@ function route() {
   `;
 
   if (hash === '/') {
-    page.innerHTML = nav + `
-      <section class="hero">
-        <canvas class="hero-canvas" id="hero-canvas"></canvas>
-        <p class="hero-eyebrow">Physics · Class 12 · JEE</p>
-        <h1>ray optics<br><em>visualised</em></h1>
-        <p class="hero-desc">interactive simulations for every concept. drag rays, adjust parameters, see physics happen live.</p>
-        <div class="search-wrap">
-          <input type="text" id="search" placeholder="search concepts..." autocomplete="off" spellcheck="false">
-        </div>
-      </section>
-      <section class="topics-section">
-        <p class="section-label">concepts</p>
-        <div class="topic-grid" id="topic-grid">
-          ${topics.map((t, i) => renderTopicCard(t, i)).join('')}
-        </div>
-      </section>
-    `;
+    page.innerHTML = nav + `<div id="home-container"></div>`;
     app.appendChild(page);
-    canvasCleanup = createHeroCanvas(document.getElementById('hero-canvas') as HTMLCanvasElement);
-    
-    const search = document.getElementById('search') as HTMLInputElement;
-    search.addEventListener('input', (e: any) => {
-      const v = e.target.value.toLowerCase();
-      const filtered = topics.filter(t => t.title.toLowerCase().includes(v) || t.description.toLowerCase().includes(v));
-      document.getElementById('topic-grid')!.innerHTML = filtered.map((t, i) => renderTopicCard(t, i)).join('');
-    });
+    renderHome(document.getElementById('home-container')!);
     
   } else if (hash === '/cheatsheet') {
     page.innerHTML = nav + `
@@ -128,12 +68,17 @@ function route() {
           <tr><td>Mirror Equation</td><td><span class="math">\\frac{1}{v} + \\frac{1}{u} = \\frac{1}{f}</span></td></tr>
           <tr><td>Snell's Law</td><td><span class="math">n_1 \\sin i = n_2 \\sin r</span></td></tr>
           <tr><td>Lens Maker</td><td><span class="math">\\frac{1}{f} = (n-1)\\left(\\frac{1}{R_1} - \\frac{1}{R_2}\\right)</span></td></tr>
+          <tr><td>Spherical Surface</td><td><span class="math">\\frac{\\mu_2}{v} - \\frac{\\mu_1}{u} = \\frac{\\mu_2 - \\mu_1}{R}</span></td></tr>
         </table>
       </div>
     `;
     app.appendChild(page);
     setTimeout(() => {
-       document.querySelectorAll('.math').forEach(el => katex.render(el.textContent||'', el as HTMLElement, {throwOnError:false}));
+       document.querySelectorAll('.math').forEach(el => {
+         try {
+           katex.render(el.textContent||'', el as HTMLElement, {throwOnError:false});
+         } catch(e) {}
+       });
     }, 0);
     
   } else if (hash.startsWith('/topic/')) {
@@ -147,6 +92,7 @@ function route() {
         <h1>${topic.title}</h1>
         <div class="concept-body"><p>${topic.description}</p></div>
         
+        ${topic.simId ? `
         <div class="sim-wrapper">
           <div class="sim-header">
             <span class="sim-label">interactive simulation</span>
@@ -156,8 +102,8 @@ function route() {
             <div id="sim-container" class="sim-container"></div>
           </div>
         </div>
-        
         <div class="formula-live" id="formula-display"></div>
+        ` : ''}
         
         ${topic.image ? `<img class="ref-image" src="${topic.image}" alt="${topic.title}" loading="lazy">` : ''}
         
