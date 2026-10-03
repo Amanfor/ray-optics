@@ -1,74 +1,92 @@
+import katex from 'katex';
 export function initSim(container: HTMLElement) {
   container.innerHTML = `
-    <div style="color:white; font-family:sans-serif;">
-      <label>n1 (denser): <input type="range" id="t-n1" min="1.0" max="2.5" step="0.1" value="1.5"></label>
-      <label>n2 (rarer): <input type="range" id="t-n2" min="1.0" max="2.5" step="0.1" value="1.0"></label>
-      <div id="t-form" style="font-family:monospace; margin:10px 0; font-size:1.1em; background:#222; padding:10px; border-radius:5px;"></div>
-      <svg id="t-svg" viewBox="-200 -200 400 400" style="width:100%; max-width:600px; height:400px; border:1px solid #444; background:#000; touch-action:none;"></svg>
+    <svg viewBox="-300 -180 600 360">
+      <defs><filter id="ray-glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+      <g id="t-grid"></g><g id="t-content"></g>
+    </svg>
+    <div class="controls">
+      <div class="control-group"><label class="control-label">n1 (denser)</label><input type="range" id="t-n1" min="1.0" max="2.5" step="0.1" value="1.5"></div>
+      <div class="control-group"><label class="control-label">n2 (rarer)</label><input type="range" id="t-n2" min="1.0" max="2.5" step="0.1" value="1.0"></div>
     </div>
+    <div class="readout-grid" id="t-readout"></div>
   `;
-  let theta1 = 30;
-  const svg = container.querySelector('#t-svg') as any;
-  const form = container.querySelector('#t-form') as HTMLElement;
-  const in1 = container.querySelector('#t-n1') as HTMLInputElement;
-  const in2 = container.querySelector('#t-n2') as HTMLInputElement;
-  let isDragging = false;
+  
+  let grid = '';
+  for(let i=-300; i<=300; i+=50) grid += `<line x1="${i}" y1="-180" x2="${i}" y2="180" class="axis"/>`;
+  for(let i=-180; i<=180; i+=50) grid += `<line x1="-300" y1="${i}" x2="300" y2="${i}" class="axis"/>`;
+  container.querySelector('#t-grid')!.innerHTML = grid;
+
+  const content = container.querySelector('#t-content') as any;
+  const readout = container.querySelector('#t-readout') as HTMLElement;
+  let theta1 = 30; let isDragging = false;
   
   function draw() {
-    let n1 = parseFloat(in1.value);
-    let n2 = parseFloat(in2.value);
-    if (n1 <= n2) {
-      n1 = n2 + 0.1;
-      in1.value = n1.toFixed(1);
-    }
+    let n1 = parseFloat((container.querySelector('#t-n1') as HTMLInputElement).value);
+    let n2 = parseFloat((container.querySelector('#t-n2') as HTMLInputElement).value);
+    if(n1 <= n2) { n1 = n2 + 0.1; (container.querySelector('#t-n1') as any).value = n1.toFixed(1); }
+    
     const critRad = Math.asin(n2/n1);
     const critDeg = critRad * 180 / Math.PI;
     const rad1 = theta1 * Math.PI / 180;
     let sin2 = (n1 / n2) * Math.sin(rad1);
     
-    let html = `<rect x="-200" y="0" width="400" height="200" fill="rgba(0,100,255,0.3)" />`;
-    html += `<line x1="-200" y1="0" x2="200" y2="0" stroke="white" stroke-width="2" />`;
-    html += `<line x1="0" y1="-200" x2="0" y2="200" stroke="gray" stroke-dasharray="5,5" />`;
+    let html = `<rect x="-300" y="0" width="600" height="180" fill="rgba(255,255,255,0.05)" />`;
+    html += `<line x1="-300" y1="0" x2="300" y2="0" class="surface" />`;
+    html += `<line x1="0" y1="-180" x2="0" y2="180" class="normal" />`;
     
-    const cx1 = -150 * Math.sin(critRad);
-    const cy1 = 150 * Math.cos(critRad);
-    html += `<line x1="0" y1="0" x2="${cx1}" y2="${cy1}" stroke="rgba(255,255,255,0.5)" stroke-dasharray="4,4" />`;
+    const cx1 = -130 * Math.sin(critRad);
+    const cy1 = 130 * Math.cos(critRad);
+    html += `<line x1="0" y1="0" x2="${cx1}" y2="${cy1}" class="angle-arc" stroke-dasharray="3,3" />`;
     
-    const x1 = -150 * Math.sin(rad1);
-    const y1 = 150 * Math.cos(rad1);
-    html += `<line x1="${x1}" y1="${y1}" x2="0" y2="0" stroke="yellow" stroke-width="3" />`;
-    html += `<circle cx="${x1}" cy="${y1}" r="20" fill="rgba(255,255,0,0.5)" id="drag-handle" style="cursor:pointer" />`;
-    html += `<circle cx="${x1}" cy="${y1}" r="5" fill="yellow" style="pointer-events:none;" />`;
+    const x1 = -130 * Math.sin(rad1);
+    const y1 = 130 * Math.cos(rad1);
+    html += `<line x1="${x1}" y1="${y1}" x2="0" y2="0" class="ray-dim" />`;
+    html += `<circle cx="${x1}" cy="${y1}" r="12" stroke="rgba(255,255,255,0.3)" stroke-width="2" fill="transparent" />`;
+    html += `<circle cx="${x1}" cy="${y1}" r="8" class="handle" id="drag-handle" />`;
     
-    if (Math.abs(sin2) > 1) {
-      form.innerHTML = `<strong style="color:red">TIR!</strong> θ_c = ${critDeg.toFixed(1)}° <br> Current θ1 = ${theta1.toFixed(1)}° > θ_c`;
-      const x2 = -150 * Math.sin(rad1);
-      const y2 = 150 * Math.cos(rad1);
-      html += `<line x1="0" y1="0" x2="${-x2}" y2="${y2}" stroke="yellow" stroke-width="3" />`;
-    } else {
-      const rad2 = Math.asin(sin2);
-      form.innerHTML = `θ_c = ${critDeg.toFixed(1)}° <br> Current θ1 = ${theta1.toFixed(1)}° <br> θ2 = ${(rad2*180/Math.PI).toFixed(1)}°`;
-      const x2 = 150 * Math.sin(rad2);
-      const y2 = -150 * Math.cos(rad2);
-      html += `<line x1="0" y1="0" x2="${x2}" y2="${y2}" stroke="orange" stroke-width="3" />`;
+    let isTIR = Math.abs(sin2) > 1;
+    let theta2 = isTIR ? theta1 : Math.asin(sin2) * 180 / Math.PI;
+    
+    readout.innerHTML = `
+      <div class="readout-cell"><span class="readout-key">θ_c (Critical)</span><span class="readout-val">${critDeg.toFixed(1)}°</span></div>
+      <div class="readout-cell"><span class="readout-key">θ1</span><span class="readout-val">${theta1.toFixed(1)}°</span></div>
+      <div class="readout-cell"><span class="readout-key">θ2</span><span class="readout-val">${isTIR ? 'TIR' : theta2.toFixed(1)+'°'}</span></div>
+    `;
+    
+    const form = document.getElementById('formula-display');
+    if (form) {
+      if (isTIR) katex.render(`\\theta_c = \\sin^{-1}(\\frac{${n2.toFixed(1)}}{${n1.toFixed(1)}}) = ${critDeg.toFixed(1)}^\\circ \\implies \\text{TIR}`, form, {throwOnError:false});
+      else katex.render(`\\theta_1 < \\theta_c \\implies \\theta_2 = ${theta2.toFixed(1)}^\\circ`, form, {throwOnError:false});
     }
     
-    svg.innerHTML = html;
-    const handle = svg.querySelector('#drag-handle');
-    handle.onpointerdown = (e:any) => { isDragging = true; svg.setPointerCapture(e.pointerId); };
-    svg.onpointermove = (e:any) => {
-      if(!isDragging) return;
-      const rect = svg.getBoundingClientRect();
-      const cx = (e.clientX - rect.left) / rect.width * 400 - 200;
-      const cy = (e.clientY - rect.top) / rect.height * 400 - 200;
-      if (cy > 0 && cx < 0) {
-        theta1 = Math.atan2(Math.abs(cx), Math.abs(cy)) * 180 / Math.PI;
-        draw();
-      }
-    };
-    svg.onpointerup = () => isDragging = false;
+    if (isTIR) {
+      html += `<line x1="0" y1="0" x2="${-x1}" y2="${y1}" class="ray" filter="url(#ray-glow)" />`;
+      html += `<text x="20" y="40" class="tir-flash">TIR!</text>`;
+    } else {
+      const rad2 = Math.asin(sin2);
+      html += `<line x1="0" y1="0" x2="${130*Math.sin(rad2)}" y2="${-130*Math.cos(rad2)}" class="ray" filter="url(#ray-glow)" />`;
+    }
+    
+    content.innerHTML = html;
+    
+    const svg = container.querySelector('svg');
+    const handle: any = container.querySelector('#drag-handle');
+    if(handle && svg) {
+      handle.onpointerdown = (e:any) => { isDragging = true; svg.setPointerCapture(e.pointerId); };
+      svg.onpointermove = (e:any) => {
+        if(!isDragging) return;
+        const rect = svg.getBoundingClientRect();
+        const cx = (e.clientX - rect.left) / rect.width * 600 - 300;
+        const cy = (e.clientY - rect.top) / rect.height * 360 - 180;
+        if (cy > 0 && cx < 0) {
+          theta1 = Math.atan2(Math.abs(cx), Math.abs(cy)) * 180 / Math.PI;
+          draw();
+        }
+      };
+      svg.onpointerup = () => isDragging = false;
+    }
   }
-  
-  in1.oninput = draw; in2.oninput = draw;
+  container.querySelectorAll('input').forEach(i => i.addEventListener('input', draw));
   draw();
 }
