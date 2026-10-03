@@ -1,0 +1,1 @@
+export function renderCheatSheet(el: HTMLElement) { el.innerHTML = '<h2>formula cheat sheet</h2>'; }

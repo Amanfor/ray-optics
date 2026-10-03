@@ -1,0 +1,1 @@
+export function renderHome(el: HTMLElement) { el.innerHTML = '<h1>ray optics</h1>'; }

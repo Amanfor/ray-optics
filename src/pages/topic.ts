@@ -1,0 +1,1 @@
+export function renderTopic(el: HTMLElement, id: string) { el.innerHTML = '<h2>topic: ' + id + '</h2>'; }
